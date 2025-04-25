@@ -12,7 +12,10 @@ static inline void __attribute__((noinline)) bogus_use(const char* s) {
 }
 
 // Placeholder for raw ARM64 shellcode output
-unsigned char shellcode[] = "{{SHELLCODE_PLACEHOLDER}}";
+unsigned char shellcode[] = {
+{{SHELLCODE_PLACEHOLDER}}
+};
+
 
 
 int main(int argc, const char * argv[]) {
